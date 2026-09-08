@@ -1,0 +1,1312 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="PDF 안의 표를 브라우저에서 바로 읽어 엑셀 파일로 내려받는 도구. 파일 내용은 서버로 전송되지 않습니다.">
+<style>
+  html { color-scheme: light dark; }
+  body { margin: 0; font: 14px/1.5 system-ui, sans-serif; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<title>PDF 표 뽑기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+
+<style>
+  :root {
+    --paper:        #F6F8F4;
+    --surface:      #FFFFFF;
+    --surface-2:    #EEF3EB;
+    --rule:         #D7E0D5;
+    --rule-strong:  #B4C2B1;
+    --ink:          #18201C;
+    --ink-soft:     #5B665F;
+    --ink-faint:    #8A958D;
+    --accent:       #1E6B52;
+    --accent-ink:   #FFFFFF;
+    --accent-soft:  #DEEDE5;
+    --credit:       #15634F;
+    --debit:        #A93226;
+    --warn-bg:      #FBF3DF;
+    --warn-ink:     #7A5510;
+    --band:         #EDF2EA;
+    --focus:        #2FA37B;
+    --shadow:       0 1px 2px rgba(24,32,28,.06), 0 8px 24px -16px rgba(24,32,28,.28);
+
+    --f-sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", system-ui, sans-serif;
+    --f-mono: "IBM Plex Mono", "SFMono-Regular", ui-monospace, monospace;
+
+    --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px;
+    --s5: 24px; --s6: 32px; --s7: 48px;
+    color-scheme: light;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:       #111512;
+      --surface:     #181D19;
+      --surface-2:   #1E241F;
+      --rule:        #2B332D;
+      --rule-strong: #3E483F;
+      --ink:         #E7ECE7;
+      --ink-soft:    #9DA9A1;
+      --ink-faint:   #76827A;
+      --accent:      #63CFA5;
+      --accent-ink:  #0D1611;
+      --accent-soft: #1B3830;
+      --credit:      #5CCBA4;
+      --debit:       #EE8878;
+      --warn-bg:     #2E2717;
+      --warn-ink:    #D9AE55;
+      --band:        #1C221D;
+      --focus:       #63CFA5;
+      --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:       #111512;
+    --surface:     #181D19;
+    --surface-2:   #1E241F;
+    --rule:        #2B332D;
+    --rule-strong: #3E483F;
+    --ink:         #E7ECE7;
+    --ink-soft:    #9DA9A1;
+    --ink-faint:   #76827A;
+    --accent:      #63CFA5;
+    --accent-ink:  #0D1611;
+    --accent-soft: #1B3830;
+    --credit:      #5CCBA4;
+    --debit:       #EE8878;
+    --warn-bg:     #2E2717;
+    --warn-ink:    #D9AE55;
+    --band:        #1C221D;
+    --focus:       #63CFA5;
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--f-sans);
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  .wrap {
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: var(--s6) var(--s4) var(--s7);
+    display: flex;
+    flex-direction: column;
+    gap: var(--s5);
+  }
+
+  /* ---------- header ---------- */
+
+  .masthead { display: flex; flex-direction: column; gap: var(--s3); }
+
+  .masthead h1 {
+    margin: 0;
+    font-size: clamp(28px, 4.5vw, 40px);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+
+  .lede {
+    margin: 0;
+    max-width: 60ch;
+    color: var(--ink-soft);
+    font-size: 15px;
+  }
+
+  .privacy {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s2);
+    align-self: flex-start;
+    padding: 6px 12px 6px 10px;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-family: var(--f-mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+  .privacy svg { width: 14px; height: 14px; flex: none; }
+
+  /* ---------- drop zone ---------- */
+
+  .intake {
+    border: 1.5px dashed var(--rule-strong);
+    border-radius: 6px;
+    background:
+      repeating-linear-gradient(
+        180deg,
+        var(--surface) 0px, var(--surface) 26px,
+        var(--band) 26px, var(--band) 52px
+      );
+    padding: var(--s6) var(--s4);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--s3);
+    transition: border-color .15s, background-color .15s;
+  }
+  .intake.hot {
+    border-color: var(--accent);
+    border-style: solid;
+    background: var(--accent-soft);
+  }
+  .intake p { margin: 0; }
+  .intake .hint { color: var(--ink-soft); font-size: 13px; }
+
+  /* ---------- buttons ---------- */
+
+  button {
+    font-family: var(--f-sans);
+    font-size: 14px;
+    font-weight: 500;
+    border-radius: 5px;
+    border: 1px solid var(--rule-strong);
+    background: var(--surface);
+    color: var(--ink);
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: background-color .12s, border-color .12s;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+    padding: 10px 20px;
+  }
+  button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+
+  button.tiny {
+    padding: 2px 7px;
+    font-size: 12px;
+    font-family: var(--f-mono);
+    color: var(--ink-faint);
+    border-color: transparent;
+    background: transparent;
+  }
+  button.tiny:hover:not(:disabled) { color: var(--debit); border-color: var(--debit); }
+
+  /* ---------- status / notices ---------- */
+
+  .notice {
+    border-radius: 5px;
+    padding: var(--s3) var(--s4);
+    font-size: 14px;
+    display: flex;
+    gap: var(--s3);
+    align-items: flex-start;
+    line-height: 1.55;
+  }
+  .notice strong { font-weight: 600; }
+  .notice.bad     { background: var(--warn-bg); color: var(--warn-ink); }
+  .notice.working { background: var(--surface-2); color: var(--ink-soft); }
+  .notice.good    { background: var(--accent-soft); color: var(--accent); }
+  .notice code {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    background: rgba(128,128,128,.16);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  .pw-row {
+    display: flex;
+    gap: var(--s2);
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: var(--s2);
+  }
+  input[type="password"], input[type="text"].name {
+    font-family: var(--f-mono);
+    font-size: 14px;
+    padding: 7px 10px;
+    border: 1px solid var(--rule-strong);
+    border-radius: 5px;
+    background: var(--surface);
+    color: var(--ink);
+    min-width: 180px;
+  }
+
+  /* ---------- workbench ---------- */
+
+  .bench {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s4);
+  }
+
+  .bench-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--s4);
+    flex-wrap: wrap;
+    padding-bottom: var(--s2);
+    border-bottom: 1px solid var(--rule);
+  }
+  .bench-head h2 {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .source {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    color: var(--ink-faint);
+    word-break: break-all;
+  }
+
+  .sample-flag {
+    display: inline-block;
+    font-family: var(--f-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .04em;
+    padding: 2px 7px;
+    border-radius: 3px;
+    background: var(--surface-2);
+    color: var(--ink-faint);
+    border: 1px solid var(--rule);
+    vertical-align: middle;
+    margin-left: var(--s2);
+  }
+
+  /* page tabs */
+  .pages {
+    display: flex;
+    gap: var(--s1);
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .pages .lbl {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: .06em;
+    color: var(--ink-faint);
+    margin-right: var(--s2);
+  }
+  .pages button {
+    font-family: var(--f-mono);
+    font-size: 13px;
+    padding: 4px 11px;
+    border-radius: 4px;
+  }
+  .pages button[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  /* controls */
+  .controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: var(--s4);
+    padding: var(--s4);
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+  }
+  .ctl { display: flex; flex-direction: column; gap: 6px; }
+  .ctl > .k {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    letter-spacing: .06em;
+    color: var(--ink-faint);
+  }
+  .ctl label {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .ctl input[type="checkbox"], .ctl input[type="radio"] { accent-color: var(--accent); }
+
+  .slider-row { display: flex; align-items: center; gap: var(--s2); }
+  .slider-row input[type="range"] { flex: 1; accent-color: var(--accent); min-width: 90px; }
+  .slider-row .end {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    color: var(--ink-faint);
+    white-space: nowrap;
+  }
+
+  /* ---------- the table ---------- */
+
+  .sheet {
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    background: var(--surface);
+    overflow-x: auto;
+    box-shadow: var(--shadow);
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 13px;
+  }
+
+  th, td {
+    border-right: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    padding: 5px 9px;
+    text-align: left;
+    vertical-align: top;
+    white-space: pre-wrap;
+    word-break: break-word;
+    min-width: 64px;
+  }
+  th:last-child, td:last-child { border-right: none; }
+
+  thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--surface-2);
+    color: var(--ink-soft);
+    font-family: var(--f-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .05em;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--rule-strong);
+  }
+
+  tbody tr:nth-child(even) td { background: var(--band); }
+  tbody tr.headerrow td {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  td.num {
+    font-family: var(--f-mono);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+  }
+  td.num.neg { color: var(--debit); }
+  td.num.pos { color: var(--credit); }
+
+  td[contenteditable]:focus {
+    background: var(--surface) !important;
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
+  }
+
+  td.rowtools {
+    min-width: 0;
+    width: 1%;
+    padding: 3px 4px;
+    text-align: center;
+    background: var(--surface) !important;
+  }
+
+  .rowno {
+    font-family: var(--f-mono);
+    font-size: 11px;
+    color: var(--ink-faint);
+    text-align: right;
+    width: 1%;
+    min-width: 0;
+    white-space: nowrap;
+    background: var(--surface) !important;
+    user-select: none;
+  }
+
+  .truncated {
+    padding: var(--s3) var(--s4);
+    font-size: 13px;
+    color: var(--ink-faint);
+    border-top: 1px solid var(--rule);
+  }
+
+  /* ---------- export bar ---------- */
+
+  .export {
+    display: flex;
+    gap: var(--s3);
+    align-items: center;
+    flex-wrap: wrap;
+    padding: var(--s4);
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+  }
+  .export .grow { flex: 1; }
+  .export .tally {
+    font-family: var(--f-mono);
+    font-size: 12px;
+    color: var(--ink-faint);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ---------- footer ---------- */
+
+  footer {
+    border-top: 1px solid var(--rule);
+    padding-top: var(--s4);
+    color: var(--ink-soft);
+    font-size: 13px;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s3);
+  }
+  footer h3 {
+    margin: 0;
+    font-family: var(--f-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: .07em;
+    color: var(--ink-faint);
+  }
+  footer ul { margin: 0; padding-left: 1.15em; display: flex; flex-direction: column; gap: 5px; }
+  footer li::marker { color: var(--rule-strong); }
+
+  [hidden] { display: none !important; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+
+  @media (max-width: 560px) {
+    .wrap { padding: var(--s5) var(--s3) var(--s6); }
+    .controls { padding: var(--s3); }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <h1>PDF 표 뽑기</h1>
+    <p class="lede">
+      거래내역·명세서 PDF를 끌어다 놓으면 안에 있는 표를 읽어 엑셀 파일로 만들어 드립니다.
+      칸이 어긋나면 받기 전에 화면에서 바로 고칠 수 있습니다.
+    </p>
+    <span class="privacy">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <rect x="4" y="10" width="16" height="11" rx="2"></rect>
+        <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
+      </svg>
+      파일은 이 브라우저 안에서만 열립니다 · 내용이 서버로 전송되지 않습니다
+    </span>
+  </header>
+
+  <section class="intake" id="intake" aria-label="PDF 열기">
+    <p><strong>PDF를 여기에 끌어다 놓으세요</strong></p>
+    <p class="hint">또는 붙여넣기(⌘V)도 됩니다</p>
+    <button type="button" id="pick">파일 고르기</button>
+    <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+  </section>
+
+  <div id="status" hidden></div>
+
+  <section class="bench" id="bench">
+
+    <div class="bench-head">
+      <h2 id="docTitle">예시 거래내역<span class="sample-flag" id="sampleFlag">예시 자료</span></h2>
+      <span class="source" id="docSource">실제 PDF를 올리면 이 자리가 바뀝니다</span>
+    </div>
+
+    <div class="pages" id="pages" hidden></div>
+
+    <div class="controls">
+      <div class="ctl">
+        <span class="k">칸 나누는 기준</span>
+        <div class="slider-row">
+          <span class="end">잘게</span>
+          <input type="range" id="gap" min="3" max="24" step="1" value="6" aria-label="칸 나누는 기준">
+          <span class="end">크게</span>
+        </div>
+        <span class="hint" style="font-size:12px;color:var(--ink-faint)">
+          칸이 뭉쳤으면 왼쪽으로, 한 칸이 쪼개졌으면 오른쪽으로
+        </span>
+      </div>
+
+      <div class="ctl">
+        <span class="k">정리</span>
+        <label><input type="checkbox" id="optTrim" checked> 빈 줄·빈 칸 지우기</label>
+        <label><input type="checkbox" id="optNum" checked> 숫자는 숫자로 (1,234 → 1234)</label>
+        <label><input type="checkbox" id="optHead" checked> 첫 줄을 제목 줄로</label>
+      </div>
+
+      <div class="ctl">
+        <span class="k">여러 장일 때</span>
+        <label><input type="radio" name="split" id="splitJoin" checked> 한 시트에 이어 붙이기</label>
+        <label><input type="radio" name="split" id="splitPage"> 페이지마다 시트 나누기</label>
+      </div>
+    </div>
+
+    <div class="sheet" id="sheet"></div>
+
+    <div class="export">
+      <button type="button" class="primary" id="save">엑셀 파일로 받기</button>
+      <button type="button" id="copy">표 복사</button>
+      <span class="grow"></span>
+      <span class="tally" id="tally"></span>
+    </div>
+
+    <div id="saveNote" hidden></div>
+  </section>
+
+  <footer>
+    <h3>못 하는 것</h3>
+    <ul>
+      <li><strong>스캔·사진으로 된 PDF</strong>는 못 읽습니다. 글자가 아니라 그림이라, 글자를 알아보는 도구가 따로 필요합니다.</li>
+      <li><strong>DRM으로 잠긴 파일</strong>은 열리지 않습니다. 파일을 발급한 곳에서 잠금 없는 사본을 받으셔야 합니다.</li>
+      <li>비밀번호가 걸린 PDF는 <strong>비밀번호를 넣으면 열립니다.</strong></li>
+      <li>PDF에는 표라는 개념이 없어 글자 <strong>위치</strong>로 칸을 짐작합니다. 받기 전에 눈으로 한 번 확인해 주세요.</li>
+    </ul>
+  </footer>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<script>
+(function () {
+  "use strict";
+
+  var MAX_PREVIEW_ROWS = 400;
+
+  var el = {
+    intake:     document.getElementById("intake"),
+    pick:       document.getElementById("pick"),
+    file:       document.getElementById("file"),
+    status:     document.getElementById("status"),
+    bench:      document.getElementById("bench"),
+    docTitle:   document.getElementById("docTitle"),
+    docSource:  document.getElementById("docSource"),
+    sampleFlag: document.getElementById("sampleFlag"),
+    pages:      document.getElementById("pages"),
+    gap:        document.getElementById("gap"),
+    optTrim:    document.getElementById("optTrim"),
+    optNum:     document.getElementById("optNum"),
+    optHead:    document.getElementById("optHead"),
+    splitJoin:  document.getElementById("splitJoin"),
+    splitPage:  document.getElementById("splitPage"),
+    sheet:      document.getElementById("sheet"),
+    save:       document.getElementById("save"),
+    copy:       document.getElementById("copy"),
+    tally:      document.getElementById("tally"),
+    saveNote:   document.getElementById("saveNote")
+  };
+
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  }
+
+  // ---- state -------------------------------------------------------------
+
+  var state = {
+    name: "예시 거래내역",
+    isSample: true,
+    pages: [],        // [{ pageNum, items:[{str,x,w,h,y}] }]
+    grids: [],        // [[ [cell,...], ... ]]  — rendered, per page
+    active: 0,
+    lastBytes: null,  // ArrayBuffer copy, for re-parse with a password
+    downloads: null,
+    saveMode: "pending"   // "claude" | "native" | "none"
+  };
+
+  // ---- sample (clearly fake, so the page opens showing what it does) ------
+
+  var SAMPLE = [
+    ["거래일시", "적요", "출금액", "입금액", "거래후잔액", "거래점"],
+    ["2026-03-02 09:14:22", "카드결제 스타컴퍼니", "48,000", "", "12,431,500", "온라인"],
+    ["2026-03-04 11:02:07", "급여 (주)예시상사", "", "3,200,000", "15,631,500", "본점"],
+    ["2026-03-07 15:47:51", "이체 김예시", "1,150,000", "", "14,481,500", "온라인"],
+    ["2026-03-11 08:30:00", "자동납부 예시통신", "89,900", "", "14,391,600", "자동이체"],
+    ["2026-03-15 13:22:40", "입금 예시물산", "", "770,000", "15,161,600", "온라인"],
+    ["2026-03-21 17:05:12", "임대료 이체", "2,400,000", "", "12,761,600", "온라인"]
+  ];
+
+  function loadSample() {
+    state.name = "예시 거래내역";
+    state.isSample = true;
+    state.pages = [];
+    state.grids = [SAMPLE.map(function (r) { return r.slice(); })];
+    state.active = 0;
+    renderPages();
+    renderSheet();
+  }
+
+  // ---- geometry → grid ---------------------------------------------------
+
+  function median(nums) {
+    if (!nums.length) return 0;
+    var a = nums.slice().sort(function (x, y) { return x - y; });
+    return a[Math.floor(a.length / 2)];
+  }
+
+  function buildRows(items) {
+    var tol = Math.max(1.5, median(items.map(function (i) { return i.h; })) * 0.5);
+    var sorted = items.slice().sort(function (a, b) {
+      return (b.y - a.y) || (a.x - b.x);
+    });
+    var rows = [];
+    var cur = null;
+    for (var i = 0; i < sorted.length; i++) {
+      var it = sorted[i];
+      if (cur && Math.abs(cur.y - it.y) <= tol) {
+        cur.items.push(it);
+        cur.y = (cur.y * (cur.items.length - 1) + it.y) / cur.items.length;
+      } else {
+        cur = { y: it.y, items: [it] };
+        rows.push(cur);
+      }
+    }
+    rows.forEach(function (r) {
+      r.items.sort(function (a, b) { return a.x - b.x; });
+    });
+    return rows;
+  }
+
+  // Whitespace projection: x-ranges no text ever touches become column splits.
+  function findSplits(items, minGap) {
+    var lo = Infinity, hi = -Infinity;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].x < lo) lo = items[i].x;
+      var right = items[i].x + items[i].w;
+      if (right > hi) hi = right;
+    }
+    if (!isFinite(lo) || hi <= lo) return [];
+
+    var span = Math.ceil(hi - lo) + 2;
+    var bins = new Uint8Array(span);
+    for (var j = 0; j < items.length; j++) {
+      var a = Math.max(0, Math.floor(items[j].x - lo));
+      var b = Math.min(span, Math.ceil(items[j].x + items[j].w - lo));
+      for (var k = a; k < b; k++) bins[k] = 1;
+    }
+
+    var splits = [];
+    var run = 0;
+    for (var m = 0; m < span; m++) {
+      if (bins[m] === 0) {
+        run++;
+      } else {
+        if (run >= minGap && (m - run) > 0) splits.push(lo + m - run / 2);
+        run = 0;
+      }
+    }
+    return splits;
+  }
+
+  function colOf(x, splits) {
+    var c = 0;
+    while (c < splits.length && x >= splits[c]) c++;
+    return c;
+  }
+
+  function joinCell(parts) {
+    var out = "";
+    var prevEnd = null;
+    for (var i = 0; i < parts.length; i++) {
+      var p = parts[i];
+      if (prevEnd !== null && (p.x - prevEnd) > p.h * 0.28) out += " ";
+      out += p.str;
+      prevEnd = p.x + p.w;
+    }
+    return out.replace(/\s+/g, " ").trim();
+  }
+
+  function gridFor(page, minGap) {
+    if (!page.items.length) return [];
+    var splits = findSplits(page.items, minGap);
+    var nCols = splits.length + 1;
+    var rows = buildRows(page.items);
+
+    return rows.map(function (row) {
+      var buckets = [];
+      for (var c = 0; c < nCols; c++) buckets.push([]);
+      row.items.forEach(function (it) {
+        buckets[colOf(it.x, splits)].push(it);
+      });
+      return buckets.map(joinCell);
+    });
+  }
+
+  function trimGrid(grid) {
+    if (!grid.length) return grid;
+    var width = grid.reduce(function (m, r) { return Math.max(m, r.length); }, 0);
+    var keep = [];
+    for (var c = 0; c < width; c++) {
+      var any = grid.some(function (r) { return (r[c] || "").trim() !== ""; });
+      if (any) keep.push(c);
+    }
+    return grid
+      .map(function (r) { return keep.map(function (c) { return r[c] || ""; }); })
+      .filter(function (r) { return r.some(function (v) { return v.trim() !== ""; }); });
+  }
+
+  function recompute() {
+    if (!state.pages.length) return;                  // sample / no doc
+    var minGap = parseInt(el.gap.value, 10);
+    var trim = el.optTrim.checked;
+    state.grids = state.pages.map(function (p) {
+      var g = gridFor(p, minGap);
+      return trim ? trimGrid(g) : g;
+    });
+    if (state.active >= state.grids.length) state.active = 0;
+    renderSheet();
+  }
+
+  // ---- numbers -----------------------------------------------------------
+
+  function asNumber(raw) {
+    var s = String(raw).trim();
+    if (s === "") return null;
+    var neg = false;
+    if (/^\(.*\)$/.test(s)) { neg = true; s = s.slice(1, -1); }
+    s = s.replace(/,/g, "").replace(/\s/g, "");
+    if (/^-/.test(s)) { neg = true; s = s.slice(1); }
+    if (/-$/.test(s)) { neg = true; s = s.slice(0, -1); }
+    if (!/^\d+(\.\d+)?$/.test(s)) return null;
+    var n = parseFloat(s);
+    if (!isFinite(n)) return null;
+    return neg ? -n : n;
+  }
+
+  // ---- render ------------------------------------------------------------
+
+  function colLabel(i) {
+    var s = "";
+    i += 1;
+    while (i > 0) {
+      var r = (i - 1) % 26;
+      s = String.fromCharCode(65 + r) + s;
+      i = Math.floor((i - 1) / 26);
+    }
+    return s;
+  }
+
+  function renderPages() {
+    if (state.grids.length <= 1) { el.pages.hidden = true; el.pages.innerHTML = ""; return; }
+    el.pages.hidden = false;
+    el.pages.innerHTML = '<span class="lbl">페이지</span>';
+    state.grids.forEach(function (g, i) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = String(i + 1);
+      b.setAttribute("aria-pressed", i === state.active ? "true" : "false");
+      b.title = g.length + "줄";
+      b.addEventListener("click", function () {
+        state.active = i;
+        renderPages();
+        renderSheet();
+      });
+      el.pages.appendChild(b);
+    });
+  }
+
+  function renderSheet() {
+    var grid = state.grids[state.active] || [];
+    el.sheet.innerHTML = "";
+
+    if (!grid.length) {
+      var empty = document.createElement("div");
+      empty.className = "truncated";
+      empty.textContent = "이 페이지에서는 표를 찾지 못했습니다. 「칸 나누는 기준」을 옮겨 보세요.";
+      el.sheet.appendChild(empty);
+      updateTally();
+      return;
+    }
+
+    var width = grid.reduce(function (m, r) { return Math.max(m, r.length); }, 0);
+    var table = document.createElement("table");
+
+    var thead = document.createElement("thead");
+    var htr = document.createElement("tr");
+    htr.appendChild(Object.assign(document.createElement("th"), { textContent: "" }));
+    for (var c = 0; c < width; c++) {
+      htr.appendChild(Object.assign(document.createElement("th"), { textContent: colLabel(c) }));
+    }
+    htr.appendChild(Object.assign(document.createElement("th"), { textContent: "" }));
+    thead.appendChild(htr);
+    table.appendChild(thead);
+
+    var tbody = document.createElement("tbody");
+    var shown = Math.min(grid.length, MAX_PREVIEW_ROWS);
+    var numMode = el.optNum.checked;
+    var headMode = el.optHead.checked;
+
+    for (var r = 0; r < shown; r++) {
+      (function (rowIndex) {
+        var tr = document.createElement("tr");
+        if (headMode && rowIndex === 0) tr.className = "headerrow";
+
+        var no = document.createElement("td");
+        no.className = "rowno";
+        no.textContent = String(rowIndex + 1);
+        tr.appendChild(no);
+
+        for (var c2 = 0; c2 < width; c2++) {
+          (function (colIndex) {
+            var td = document.createElement("td");
+            var val = grid[rowIndex][colIndex] || "";
+            td.textContent = val;
+            td.contentEditable = "true";
+            td.spellcheck = false;
+
+            if (numMode && !(headMode && rowIndex === 0)) {
+              var n = asNumber(val);
+              if (n !== null) {
+                td.className = "num " + (n < 0 ? "neg" : "pos");
+              }
+            }
+            td.addEventListener("input", function () {
+              grid[rowIndex][colIndex] = td.textContent;
+            });
+            tr.appendChild(td);
+          })(c2);
+        }
+
+        var tools = document.createElement("td");
+        tools.className = "rowtools";
+        var del = document.createElement("button");
+        del.type = "button";
+        del.className = "tiny";
+        del.textContent = "✕";
+        del.title = rowIndex + 1 + "번 줄 지우기";
+        del.setAttribute("aria-label", rowIndex + 1 + "번 줄 지우기");
+        del.addEventListener("click", function () {
+          grid.splice(rowIndex, 1);
+          renderSheet();
+        });
+        tools.appendChild(del);
+        tr.appendChild(tools);
+
+        tbody.appendChild(tr);
+      })(r);
+    }
+    table.appendChild(tbody);
+    el.sheet.appendChild(table);
+
+    if (grid.length > shown) {
+      var more = document.createElement("div");
+      more.className = "truncated";
+      more.textContent = "화면에는 " + shown + "줄까지만 보여 드립니다. 엑셀 파일에는 " +
+                         grid.length + "줄이 전부 들어갑니다.";
+      el.sheet.appendChild(more);
+    }
+    updateTally();
+  }
+
+  function updateTally() {
+    var totalRows = state.grids.reduce(function (s, g) { return s + g.length; }, 0);
+    var cols = (state.grids[state.active] || []).reduce(function (m, r) {
+      return Math.max(m, r.length);
+    }, 0);
+    el.tally.textContent =
+      state.grids.length + "장 · " + totalRows + "줄 · 이 페이지 " + cols + "칸";
+  }
+
+  // ---- status ------------------------------------------------------------
+
+  function say(kind, html) {
+    el.status.hidden = false;
+    el.status.className = "notice " + kind;
+    el.status.innerHTML = html;
+  }
+  function clearSay() { el.status.hidden = true; el.status.innerHTML = ""; }
+
+  // ---- loading a PDF -----------------------------------------------------
+
+  // Reads the first KB. Returns "drm" only when the header actually says so,
+  // "notpdf" when the PDF signature is missing, "" otherwise.
+  function headerVerdict(bytes) {
+    var head = new Uint8Array(bytes, 0, Math.min(1024, bytes.byteLength));
+    var s = "";
+    for (var i = 0; i < head.length; i++) s += String.fromCharCode(head[i]);
+    if (/DRM|FASOO|MarkAny|SoftCamp|Sealed|DocuSafe/i.test(s)) return "drm";
+    if (s.indexOf("%PDF") === -1) return "notpdf";
+    return "";
+  }
+
+  function handleFile(file) {
+    if (!file) return;
+    if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") {
+      say("bad", "<div><strong>PDF 파일이 아닙니다.</strong> 확장자가 <code>.pdf</code>인 파일을 올려 주세요.</div>");
+      return;
+    }
+    say("working", "<div><strong>" + escapeHtml(file.name) + "</strong> 읽는 중…</div>");
+    var reader = new FileReader();
+    reader.onerror = function () {
+      say("bad", "<div><strong>파일을 읽지 못했습니다.</strong> 다시 시도해 주세요.</div>");
+    };
+    reader.onload = function () {
+      state.lastBytes = reader.result;
+      state.name = file.name.replace(/\.pdf$/i, "");
+      openPdf(reader.result, undefined);
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function openPdf(bytes, password) {
+    if (!window.pdfjsLib) {
+      say("bad", "<div><strong>PDF 읽는 도구를 불러오지 못했습니다.</strong> 새로고침 해 주세요.</div>");
+      return;
+    }
+    var opts = { data: new Uint8Array(bytes.slice(0)) };
+    if (password) opts.password = password;
+
+    pdfjsLib.getDocument(opts).promise.then(function (pdf) {
+      return readAllPages(pdf);
+    }).then(function (pages) {
+      var textCount = pages.reduce(function (s, p) { return s + p.items.length; }, 0);
+      if (textCount === 0) {
+        say("bad",
+          "<div><strong>글자가 없는 PDF입니다.</strong> 종이를 스캔하거나 사진으로 찍은 파일로 보입니다. " +
+          "이 도구는 글자가 들어 있는 PDF만 읽을 수 있습니다.</div>");
+        return;
+      }
+      state.pages = pages;
+      state.isSample = false;
+      state.active = 0;
+      el.sampleFlag.hidden = true;
+      el.docTitle.textContent = state.name;
+      el.docSource.textContent = pages.length + "페이지 · 글자 " + textCount.toLocaleString("ko-KR") + "개";
+      clearSay();
+      recompute();
+      renderPages();
+      el.bench.scrollIntoView({ behavior: "smooth", block: "start" });
+    }).catch(function (err) {
+      var name = err && err.name;
+      var verdict = headerVerdict(bytes);
+      if (name === "PasswordException") {
+        askPassword(err.code === 2);
+      } else if (verdict === "drm") {
+        say("bad",
+          "<div><strong>PDF가 아니라 잠긴 파일입니다.</strong> " +
+          "문서보안(DRM)이 걸린 파일은 어떤 변환 도구로도 열 수 없습니다. " +
+          "파일을 보내 준 곳에 잠금 없는 사본을 요청하세요.</div>");
+      } else if (verdict === "notpdf") {
+        say("bad",
+          "<div><strong>속이 PDF가 아닙니다.</strong> 이름만 <code>.pdf</code>이고 내용은 다른 형식입니다. " +
+          "문서보안이 걸렸거나 파일이 잘못 저장된 경우입니다.</div>");
+      } else {
+        say("bad",
+          "<div><strong>이 PDF는 열지 못했습니다.</strong> 파일이 손상됐거나 지원하지 않는 형식입니다." +
+          "<br><code>" + escapeHtml(String(err && err.message || err)) + "</code></div>");
+      }
+    });
+  }
+
+  function askPassword(wrong) {
+    say("bad",
+      "<div><strong>비밀번호가 걸린 PDF입니다.</strong>" +
+      (wrong ? " 방금 넣은 비밀번호가 맞지 않습니다." : " 비밀번호를 넣으면 열립니다.") +
+      '<div class="pw-row">' +
+      '<input type="password" id="pw" placeholder="비밀번호" autocomplete="off">' +
+      '<button type="button" id="pwGo">열기</button>' +
+      "</div></div>");
+    var pw = document.getElementById("pw");
+    var go = document.getElementById("pwGo");
+    function submit() {
+      if (!pw.value) return;
+      say("working", "<div>비밀번호로 여는 중…</div>");
+      openPdf(state.lastBytes, pw.value);
+    }
+    go.addEventListener("click", submit);
+    pw.addEventListener("keydown", function (e) { if (e.key === "Enter") submit(); });
+    pw.focus();
+  }
+
+  function readAllPages(pdf) {
+    var jobs = [];
+    for (var n = 1; n <= pdf.numPages; n++) {
+      jobs.push(readPage(pdf, n));
+    }
+    return Promise.all(jobs);
+  }
+
+  function readPage(pdf, n) {
+    return pdf.getPage(n).then(function (page) {
+      return page.getTextContent().then(function (tc) {
+        var items = [];
+        for (var i = 0; i < tc.items.length; i++) {
+          var it = tc.items[i];
+          if (!it.str || !it.str.trim()) continue;
+          var t = it.transform;
+          items.push({
+            str: it.str,
+            x: t[4],
+            y: t[5],
+            w: it.width || 0,
+            h: Math.hypot(t[2], t[3]) || it.height || 10
+          });
+        }
+        return { pageNum: n, items: items };
+      });
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  // ---- export ------------------------------------------------------------
+
+  function exportGrids() {
+    var numMode = el.optNum.checked;
+    return state.grids.map(function (g) {
+      return g.map(function (row) {
+        return row.map(function (cell) {
+          if (!numMode) return cell;
+          var n = asNumber(cell);
+          return n === null ? cell : n;
+        });
+      });
+    });
+  }
+
+  function buildWorkbook() {
+    var grids = exportGrids();
+    var wb = XLSX.utils.book_new();
+
+    if (el.splitPage.checked && grids.length > 1) {
+      grids.forEach(function (g, i) {
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(g), "p" + (i + 1));
+      });
+    } else {
+      var all = [];
+      grids.forEach(function (g, i) {
+        if (i > 0 && el.optHead.checked && g.length) {
+          all = all.concat(g.slice(1));      // repeated header on later pages
+        } else {
+          all = all.concat(g);
+        }
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(all), "표");
+    }
+    return wb;
+  }
+
+  function tsv() {
+    var grid = state.grids[state.active] || [];
+    return grid.map(function (r) {
+      return r.map(function (c) { return String(c).replace(/\t/g, " "); }).join("\t");
+    }).join("\n");
+  }
+
+  // Two homes, two save routes. Inside the claude.ai viewer the sandbox blocks
+  // <a download>, so the file goes through the downloads capability. Served
+  // anywhere else there is no window.claude at all — use a normal browser
+  // download.
+  var downloadsReady = (function () {
+    if (!window.claude || typeof window.claude.use !== "function") {
+      state.saveMode = "native";
+      return Promise.resolve("native");
+    }
+    return window.claude.use("downloads").then(function (d) {
+      state.downloads = d;
+      state.saveMode = d ? "claude" : "none";
+      if (!d) noteNoSave();
+      return state.saveMode;
+    }, function () {
+      state.saveMode = "none";
+      noteNoSave();
+      return "none";
+    });
+  })();
+
+  function nativeSave(blob, fname) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = fname;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () {
+      URL.revokeObjectURL(url);
+      a.parentNode && a.parentNode.removeChild(a);
+    }, 2000);
+  }
+
+  function noteNoSave() {
+    el.save.disabled = true;
+    el.saveNote.hidden = false;
+    el.saveNote.className = "notice working";
+    el.saveNote.innerHTML =
+      "<div>이 화면에서는 파일 저장이 되지 않습니다. <strong>「표 복사」</strong>를 누른 뒤 엑셀에 붙여넣으세요.</div>";
+  }
+
+  el.save.addEventListener("click", function () {
+    if (!state.grids.length) return;
+    if (state.isSample) {
+      el.saveNote.hidden = false;
+      el.saveNote.className = "notice bad";
+      el.saveNote.innerHTML = "<div><strong>지금 보이는 건 예시 자료입니다.</strong> 위에 PDF를 올리면 진짜 내용으로 바뀝니다.</div>";
+      return;
+    }
+    el.save.disabled = true;
+    downloadsReady.then(doSave).then(null, function () { el.save.disabled = false; });
+  });
+
+  function doSave() {
+    el.save.disabled = false;
+    if (state.saveMode === "none") { noteNoSave(); return; }
+
+    var wb, out;
+    try {
+      wb = buildWorkbook();
+      out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    } catch (e) {
+      el.saveNote.hidden = false;
+      el.saveNote.className = "notice bad";
+      el.saveNote.innerHTML = "<div><strong>엑셀 파일을 만들지 못했습니다.</strong> <code>" +
+        escapeHtml(String(e && e.message || e)) + "</code></div>";
+      return;
+    }
+
+    var blob = new Blob([out], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    });
+    var fname = (state.name || "표").replace(/[\\/:*?"<>|]/g, "_") + ".xlsx";
+
+    if (state.saveMode === "native") {
+      nativeSave(blob, fname);
+      el.saveNote.hidden = false;
+      el.saveNote.className = "notice good";
+      el.saveNote.innerHTML = "<div><strong>" + escapeHtml(fname) +
+        "</strong> 내려받았습니다. 브라우저의 다운로드 폴더를 보세요.</div>";
+      return;
+    }
+
+    el.save.disabled = true;
+    state.downloads.save({ filename: fname, data: blob }).then(function () {
+      el.saveNote.hidden = false;
+      el.saveNote.className = "notice good";
+      el.saveNote.innerHTML = "<div><strong>" + escapeHtml(fname) + "</strong> 저장했습니다.</div>";
+    }).catch(function (err) {
+      var code = err && err.code;
+      el.saveNote.hidden = false;
+      el.saveNote.className = "notice bad";
+      if (code === "declined") {
+        el.saveNote.innerHTML = "<div>저장을 취소하셨습니다.</div>";
+      } else if (code === "rate_limited") {
+        el.saveNote.innerHTML = "<div>저장 창이 이미 열려 있습니다. 잠시 뒤 다시 눌러 주세요.</div>";
+      } else if (code === "unavailable" || code === "not_granted" ||
+                 code === "capability_disabled" || code === "capability_removed") {
+        noteNoSave();
+      } else {
+        el.saveNote.innerHTML = "<div><strong>저장하지 못했습니다.</strong> <code>" +
+          escapeHtml(String(err && err.message || code || err)) + "</code></div>";
+      }
+    }).then(function () {
+      el.save.disabled = (state.saveMode === "none");
+    });
+  }
+
+  el.copy.addEventListener("click", function () {
+    var text = tsv();
+    function done(ok) {
+      el.saveNote.hidden = false;
+      el.saveNote.className = ok ? "notice good" : "notice bad";
+      el.saveNote.innerHTML = ok
+        ? "<div>이 페이지의 표를 복사했습니다. 엑셀에서 붙여넣기(⌘V) 하세요.</div>"
+        : "<div><strong>복사하지 못했습니다.</strong> 표를 직접 끌어서 선택한 뒤 복사해 주세요.</div>";
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { done(true); }, function () { fallback(); });
+    } else {
+      fallback();
+    }
+    function fallback() {
+      var ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      done(ok);
+    }
+  });
+
+  // ---- input wiring ------------------------------------------------------
+
+  el.pick.addEventListener("click", function () { el.file.click(); });
+  el.file.addEventListener("change", function () { handleFile(el.file.files[0]); });
+
+  ["dragenter", "dragover"].forEach(function (ev) {
+    el.intake.addEventListener(ev, function (e) {
+      e.preventDefault();
+      el.intake.classList.add("hot");
+    });
+  });
+  ["dragleave", "drop"].forEach(function (ev) {
+    el.intake.addEventListener(ev, function (e) {
+      e.preventDefault();
+      el.intake.classList.remove("hot");
+    });
+  });
+  el.intake.addEventListener("drop", function (e) {
+    if (e.dataTransfer && e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+  window.addEventListener("dragover", function (e) { e.preventDefault(); });
+  window.addEventListener("drop", function (e) {
+    e.preventDefault();
+    if (e.dataTransfer && e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+  window.addEventListener("paste", function (e) {
+    var items = e.clipboardData && e.clipboardData.files;
+    if (items && items.length) handleFile(items[0]);
+  });
+
+  el.gap.addEventListener("input", recompute);
+  el.optTrim.addEventListener("change", recompute);
+  el.optNum.addEventListener("change", renderSheet);
+  el.optHead.addEventListener("change", renderSheet);
+
+  loadSample();
+})();
+</script>
+
+</body>
+</html>
